@@ -23,6 +23,7 @@ const TYPE_MAP = {
 // Argument Parsing
 let TARGET_GIR = process.argv[2];
 let OUTPUT_FILE = process.argv[3];
+let LIBRARY = { name: null, version: null };
 
 if (process.argv.length <= 2) {
   console.log(`./parser.js TARGET_GIR [OUTPUT_FILE]`);
@@ -33,16 +34,16 @@ if (!fs.existsSync(TARGET_GIR)) {
   TARGET_GIR = `${GIR_PATH}/${TARGET_GIR}.gir`
   if (!fs.existsSync(TARGET_GIR)) error("Target gir not found. (File does not exist)");
 }
-if (!OUTPUT_FILE) {
-  OUTPUT_FILE = path.basename(TARGET_GIR, path.extname(TARGET_GIR)) + ".gui";
-}
 
 // Parsing the xml .gir file
 let json = convert.xml2js(
   fs.readFileSync(TARGET_GIR, {encoding: "utf8"})
-).elements.find(v => v.name == "repository").elements.find(v => v.name == "namespace").elements
+).elements.find(v => v.name == "repository").elements.find(v => v.name == "namespace")
 
-const widgets = json.filter(v => v.name == 'class');
+LIBRARY.name = json.attributes.name.toLowerCase();
+LIBRARY.version = json.attributes.version;
+
+const widgets = json.elements.filter(v => v.name == 'class');
 let definitions = [] // { name, parent, children[], properties: { name, type } }[]
 
 // Parse every widget into a specificly formatted array of objects
@@ -55,6 +56,8 @@ for (let widget of widgets) {
   };
   let parent = widgets.find(v => v.attributes.name == widget.attributes.parent);
   if (parent) definition.parent = parent.attributes['glib:type-name'];
+
+  if (!widget.elements) continue;
   
   for (let property of widget.elements.filter(v => v.name == "property")) {
     let property_name = property.attributes.name;
@@ -111,5 +114,10 @@ function generate_file(defs) {
   return file_content;
 }
 
+// Make sure to include the header
+
+
+let header = `#header "<requires lib=\\"${LIBRARY.name}\\" version=\\"${LIBRARY.version}\\"/>"\n\n`
+
 // Write the file
-fs.writeFileSync(OUTPUT_FILE, generate_file(definitions));
+fs.writeFileSync(!OUTPUT_FILE ? `${LIBRARY.name}-${LIBRARY.version}.gui` : OUTPUT_FILE, header + generate_file(definitions));
