@@ -17,7 +17,8 @@ const CTYPE_MAP = {
   "guint": "Number",
 }
 const TYPE_MAP = {
-  "Align": "String"
+  "Align": "String",
+  "Orientation": "String"
 }
 
 // Argument Parsing
@@ -69,14 +70,20 @@ for (let widget of widgets) {
         name: property_name,
         type: CTYPE_MAP[ctype]
       })
-      // else console.warn(`Warning: Couldn't find ctype '${ctype}'`);
+      else console.warn(`Warning: Couldn't find ctype '${ctype}', ignoring`);
     } else {
       let type_name = type.attributes.name;
       if (TYPE_MAP[type_name]) definition.properties.push({
         name: property_name,
         type: TYPE_MAP[type_name]
       })
-      // else console.warn(`Warning: Couldn't find type '${type_name}'`);
+      else {
+        console.warn(`Warning: Couldn't find type '${type_name}', using String instead`);
+        definition.properties.push({
+          name: property_name,
+          type: "String"
+        })
+      }
     }
   }
   definitions.push(definition);
