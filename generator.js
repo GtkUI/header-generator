@@ -45,7 +45,7 @@ LIBRARY.name = json.attributes.name.toLowerCase();
 LIBRARY.version = json.attributes.version;
 
 const widgets = json.elements.filter(v => v.name == 'class');
-let definitions = [] // { name, parent, children[], properties: { name, type } }[]
+let definitions = [] // { name, parent, children[], properties: { name, type, property_type } }[]
 
 // Parse every widget into a specificly formatted array of objects
 for (let widget of widgets) {
@@ -63,29 +63,51 @@ for (let widget of widgets) {
   for (let property of widget.elements.filter(v => v.name == "property")) {
     let property_name = property.attributes.name;
     let type = property.elements.find(v => v.name == "type");
+    let property_type = "ChildProp";
+    if (definition.name == "GtkLabel" && property_name == "label") property_type = "ChildArg";
     if (!type || !type.attributes) continue;
     let ctype = type.attributes['c:type'];
     if (ctype) {
       if (CTYPE_MAP[ctype]) definition.properties.push({
         name: property_name,
-        type: CTYPE_MAP[ctype]
+        type: CTYPE_MAP[ctype],
+        property_type
       })
       else console.warn(`Warning: Couldn't find ctype '${ctype}', ignoring`);
     } else {
       let type_name = type.attributes.name;
       if (TYPE_MAP[type_name]) definition.properties.push({
         name: property_name,
-        type: TYPE_MAP[type_name]
+        type: TYPE_MAP[type_name],
+        property_type
       })
       else {
         console.warn(`Warning: Couldn't find type '${type_name}', using String instead`);
         definition.properties.push({
           name: property_name,
-          type: "String"
+          type: "String",
+          property_type
         })
       }
     }
   }
+
+
+  for (let inherits of widget.elements.filter(v => v.name == "implements")) {
+    let property = { name: null, type: null };
+    switch (inherits.attributes.name) {
+      case 'Buildable':
+        property = { name: "id", type: "String", property_type: "InlineProp" };
+        break;
+      case 'Orientable':
+        property = { name: "orientation", type: "String", property_type: "ChildProp" };
+        break;
+      default:
+        continue
+    }
+    definition.properties.push(property);
+  }
+
   definitions.push(definition);
 }
 
@@ -113,7 +135,7 @@ function generate_file(defs) {
   for (let definition of defs) {
     file_content += `@${definition.name} ${definition.parent ? '-> ' + definition.parent + ' ' : ''}{\n`;
     for (let property of definition.properties) {
-      file_content += `\t@ChildProp("${property.name}", ${property.type})\n`;
+      file_content += `\t@${property.property_type}("${property.name}", ${property.type})\n`;
     }
     file_content += '}\n';
     file_content += generate_file(definition.children);
